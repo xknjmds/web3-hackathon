@@ -650,3 +650,48 @@ body {
     font-size: 10px;
   }
 }
+
+/* Box the setup title and align the setup column as a single composition */
+.setup-heading {
+  max-width: 760px;
+  margin: 24px auto 20px;
+  padding: 22px 28px;
+  border: 1px solid #dce7d9;
+  border-radius: 16px;
+  background: #f9fcf7;
+  box-shadow: 0 8px 24px rgba(47, 61, 52, 0.04);
+}
+.setup-heading .eyebrow {
+  margin-bottom: 8px;
+}
+.setup-heading p {
+  margin-top: 8px;
+}
+.stepper,
+.setup-progress,
+.setup-card-wrap,
+.setup-footer {
+  width: 100%;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.stepper {
+  margin-bottom: 20px;
+}
+.setup-progress {
+  margin-bottom: 16px;
+}
+@media (max-width: 680px) {
+  .setup-heading {
+    margin: 22px auto 18px;
+    padding: 18px 16px;
+    border-radius: 13px;
+  }
+  .setup-heading h1 {
+    font-size: 31px;
+  }
+  .setup-heading p {
+    font-size: 13px;
+  }
+}

@@ -623,3 +623,30 @@ body {
     font-size: 9px;
   }
 }
+
+.setup-progress-item {
+  min-height: 44px;
+  padding: 8px 13px;
+  border: 1px solid #dfe7dc;
+  border-radius: 9px;
+  background: #fbfcf9;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.setup-progress-item.current {
+  border-color: #b7cbb3;
+  background: #e8f0e5;
+}
+.setup-progress-item.done {
+  border-color: #d4e2d1;
+}
+.setup-progress-item:not(:disabled):hover {
+  border-color: #a9c1a3;
+  background: #f0f5ed;
+}
+@media (max-width: 680px) {
+  .setup-progress-item {
+    min-height: 42px;
+    padding: 7px 9px;
+    font-size: 10px;
+  }
+}

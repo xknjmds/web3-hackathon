@@ -1,10 +1,24 @@
-# PadalaSplit backend
+# Hati
 
-Backend (A) side of **PadalaSplit**, a PaiFlow-based remittance-splitting app, implemented on the `@paiflow/sdk@0.2.0` starter. The API surface is defined by [`CONTRACT.md`](CONTRACT.md) v1.2 — the agreed contract with the frontend (B). A sender picks a split template (e.g. monthly allotment → parents 50% / sister 50%), prepares a USDC payment on Stellar testnet, signs it with Freighter, and submits the exact signed envelope; the backend polls the original transaction and reports per-recipient payouts as PaiFlow events arrive.
+**Hati** ("split" in Filipino) is a PaiFlow-based remittance-splitting app built on the `@paiflow/sdk@0.2.0` starter. A sender picks a family plan (e.g. monthly allotment → parents 50% / sister 50%), prepares a USDC payment on Stellar testnet, signs it with Freighter, and submits the exact signed envelope; the backend polls the original transaction and reports per-recipient payouts as PaiFlow events arrive.
 
-The PaiFlow SDK runs server-only in Node. The browser calls this app's routes and signs with Freighter; it never receives the Paiflow credential, deployment IDs, or recipient wallet addresses.
+The app is a single Next.js project: the Hati sender UI (frontend) and the API routes (backend) defined by [`CONTRACT.md`](CONTRACT.md) v1.2. The PaiFlow SDK runs server-only in Node. The browser calls this app's routes and signs with Freighter; it never receives the Paiflow credential, deployment IDs, or recipient wallet addresses.
 
-## Routes (CONTRACT.md v1.2)
+> The project was previously called **PadalaSplit**; that name still appears in `CONTRACT.md`, code comments and the browser recovery scope (`padalasplit`), which is kept unchanged so in-progress payments survive the rename.
+
+## Frontend: Hati sender UI
+
+The UI lives in [`components/starter-app.tsx`](components/starter-app.tsx) (rendered by [`app/page.tsx`](app/page.tsx)) and talks only to this app's own routes through [`lib/padala-api.ts`](lib/padala-api.ts).
+
+1. **Choose a plan and amount** — the family plan picker is filled from `GET /api/templates`; the USDC amount (up to 7 decimals) is converted to stroops with string/bigint math and shown with a peso estimate from `GET /api/fx` plus a per-recipient split preview.
+2. **Connect your wallet** — Freighter connects in the browser; Hati never sees private keys.
+3. **Prepare transfer** — `POST /api/transfers/prepare` returns an unsigned testnet envelope and transfer reference, saved to the browser recovery record before signing.
+4. **Review and sign** — Freighter signs using the server-prepared network passphrase; the signed envelope is checked against the original transaction body/hash (altered operations and fee-bump envelopes are rejected) and saved before submission.
+5. **Submit and track** — `POST /api/transfers/submit` sends the exact saved envelope; the UI then polls `GET /api/transfers/:id` with bounded confirmation and shows status, per-recipient payouts (on-chain, PaiFlow event, or preview amounts) and a Stellar explorer link when not in mock mode.
+
+**Recovery & transaction status** keeps the original transaction hash, transfer reference and signed envelope in this browser across reloads, guarded by Web Locks so two tabs can't act on the same payment. Uncertain results only offer *Check original transaction* or *Retry exact saved envelope* — never a replacement payment. A payment that was never submitted can be discarded; a final result must be acknowledged before starting another. In mock mode the topbar shows **Mock PaiFlow** and a banner explains that no real Stellar transaction is made.
+
+## Backend routes (CONTRACT.md v1.2)
 
 | Route | Purpose |
 | --- | --- |
@@ -52,7 +66,7 @@ Deployment IDs live server-side in `templates.json` (one token used across deplo
 
 These are deliberate, contract-driven departures from the original starter guarantees (see also the note at the end of `AGENTS.md`):
 
-1. **Assets**: the capabilities gate accepts testnet deployments that are `native` **or** `known`/USDC, because PadalaSplit templates pay USDC. Mainnet is still refused, and prepare additionally asserts the `Test SDF Network ; September 2015` passphrase (`WRONG_NETWORK`).
+1. **Assets**: the capabilities gate accepts testnet deployments that are `native` **or** `known`/USDC, because Hati templates pay USDC. Mainnet is still refused, and prepare additionally asserts the `Test SDF Network ; September 2015` passphrase (`WRONG_NETWORK`).
 2. **Amounts**: the fixed 1 XLM payment is replaced by contract-validated variable amounts (positive stroop strings, `bigint` math only).
 3. **Deployment env var**: `PAIFLOW_DEPLOYMENT_ID` is dropped; per-template deployment IDs live in `templates.json` (server-only).
 4. **Routes**: the starter's `POST /api/pay` and `GET /api/integration` routes (and the old browser demo) were removed in favor of the contract routes above.
@@ -66,5 +80,7 @@ pnpm test
 pnpm build
 node scripts/check-browser-bundle.mjs
 ```
+
+For an end-to-end walk of the API lifecycle without real funds, start the server with `PAIFLOW_USE_MOCK=true` (and no Supabase env), then run `node scripts/smoke-mock.mjs [baseUrl]`. It walks prepare → sign → submit → idempotent resubmit → `SUCCESS`, temporarily substituting a fixture template if `templates.json` still has `TODO_` deployment IDs.
 
 Tests use fixtures and mocked upstream responses; no live financial tests are performed without authorization. See [`llms.md`](llms.md) for shared Paiflow SDK integration context and [`CONTRACT.md`](CONTRACT.md) for the API contract.

@@ -273,3 +273,353 @@ body {
   opacity: .55;
   cursor: not-allowed;
 }
+
+/* Hati visual refresh: readable type, calm contrast, and responsive spacing */
+:root {
+  --hati-bg: #f1f5ee;
+  --hati-surface: #fbfcf9;
+  --hati-text: #2f3d34;
+  --hati-muted: #68776b;
+  --hati-border: #dfe7dc;
+  --hati-green: #476451;
+  --hati-green-soft: #e8f0e5;
+  color: var(--hati-text);
+  background: var(--hati-bg);
+  font-size: 16px;
+}
+body {
+  color: var(--hati-text);
+  background: var(--hati-bg);
+  line-height: 1.5;
+}
+.sidebar,
+.topbar,
+.form-card,
+.review-card {
+  background-color: var(--hati-surface);
+}
+.sidebar,
+.topbar,
+.form-card,
+.review-card,
+.preset-option {
+  border-color: var(--hati-border);
+}
+.sidebar {
+  background: #f9fbf7;
+}
+.brand,
+.card-heading h2,
+.preset-option,
+.amount-input-wrap input,
+.review-title h2,
+.review-total > b,
+.recipient-name b,
+.recipient-share b,
+.review-person b,
+.review-person strong {
+  color: var(--hati-text);
+}
+.topbar,
+.page-footer,
+.breadcrumb,
+.stepper,
+.setup-progress-item,
+.form-footer > span {
+  color: var(--hati-muted);
+}
+.topbar {
+  min-height: 76px;
+}
+.content-wrap {
+  max-width: 1160px;
+  padding-top: 32px;
+  padding-bottom: 30px;
+}
+.demo-banner {
+  border-color: #dce8d8;
+  background: #edf4e9;
+  color: #526d57;
+  font-size: 12px;
+  padding: 12px 15px;
+}
+.demo-banner small {
+  color: #718174;
+  font-size: 11px;
+}
+.page-heading h1,
+.center-state h1,
+.centered-title {
+  color: var(--hati-text);
+  font-size: 40px;
+  line-height: 1.16;
+  letter-spacing: -1.25px;
+}
+.page-heading p,
+.center-state > p {
+  color: var(--hati-muted);
+  font-size: 15px;
+}
+.eyebrow,
+.section-caption {
+  color: #617d67;
+  font-size: 11px;
+}
+.stepper {
+  gap: 13px;
+  margin-bottom: 22px;
+}
+.step {
+  color: #778479;
+  font-size: 12px;
+}
+.step > span {
+  width: 25px;
+  height: 25px;
+  font-size: 11px;
+}
+.step.current {
+  color: #385743;
+}
+.setup-progress {
+  gap: 22px;
+  margin-bottom: 18px;
+}
+.setup-progress-item {
+  gap: 9px;
+  color: #748176;
+  font-size: 12px;
+}
+.setup-progress-item span {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+.setup-card-wrap,
+.setup-footer {
+  max-width: 760px;
+}
+.setup-card-wrap {
+  min-height: 300px;
+}
+.setup-card {
+  min-height: 280px;
+  padding: 28px;
+  border-radius: 15px;
+  box-shadow: 0 8px 28px rgba(47, 61, 52, 0.045);
+}
+.setup-card-intro {
+  color: var(--hati-muted);
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.preset-list {
+  gap: 10px;
+}
+.preset-option {
+  min-height: 64px;
+  padding: 12px 14px;
+  border-radius: 11px;
+}
+.preset-copy b {
+  font-size: 13px;
+}
+.preset-copy small {
+  color: #748176;
+  font-size: 11px;
+}
+.preset-icon {
+  width: 36px;
+  height: 36px;
+}
+.amount-input-label {
+  color: #64756a;
+  font-size: 11px;
+}
+.amount-input-wrap {
+  height: 60px;
+}
+.amount-input-wrap input {
+  font-size: 28px;
+}
+.amount-input-wrap > b {
+  font-size: 12px;
+}
+.quick-amounts button {
+  min-height: 36px;
+  padding: 7px 13px;
+  font-size: 11px;
+}
+.conversion-note {
+  max-width: 510px;
+  padding: 12px;
+}
+.conversion-note b {
+  color: #3d5745;
+  font-size: 12px;
+}
+.conversion-note small {
+  color: #69776c;
+  font-size: 11px;
+}
+.field-help {
+  color: #637367;
+  font-size: 11px;
+}
+.field-help.error {
+  color: #914f45;
+}
+.split-card {
+  border-radius: 15px;
+  padding: 24px;
+}
+.split-total-top {
+  background: #edf4e9;
+  border: 1px solid #dce8d8;
+  padding: 20px;
+}
+.split-total-top > span {
+  color: #65766a;
+  font-size: 12px;
+}
+.split-total-top b {
+  color: #304638;
+  font-size: 22px;
+}
+.split-total-top small {
+  font-size: 12px;
+}
+.recipient-row {
+  min-height: 53px;
+  grid-template-columns: 36px minmax(120px, 1fr) auto 90px;
+  gap: 12px;
+}
+.avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 11px;
+}
+.recipient-name b,
+.recipient-share b {
+  font-size: 12px;
+}
+.recipient-name small,
+.recipient-share small {
+  color: #68776c;
+  font-size: 11px;
+}
+.form-footer > span,
+.connect-hint {
+  color: #66766b;
+  font-size: 11px;
+}
+.primary-button,
+.secondary-button,
+.wallet-button {
+  min-height: 42px;
+  font-size: 12px;
+}
+.primary-button {
+  background: #40584a;
+}
+.primary-button:hover {
+  background: #506c59;
+}
+.narrow-page {
+  max-width: 660px;
+}
+.review-card {
+  border-radius: 15px;
+  padding: 25px;
+}
+.review-total > b {
+  font-size: 30px;
+}
+.review-person b,
+.review-person strong {
+  font-size: 12px;
+}
+.review-person small,
+.review-total > small,
+.review-footnote,
+.safe-note {
+  color: #68776c;
+  font-size: 11px;
+}
+.page-footer {
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .content-wrap {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+@media (max-width: 680px) {
+  .content-wrap {
+    padding: 20px 16px 24px;
+  }
+  .page-heading h1,
+  .center-state h1,
+  .centered-title {
+    font-size: 34px;
+  }
+  .page-heading p,
+  .center-state > p {
+    max-width: none;
+    font-size: 14px;
+  }
+  .stepper {
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .step {
+    font-size: 10px;
+  }
+  .step > span {
+    width: 22px;
+    height: 22px;
+  }
+  .setup-progress {
+    gap: 12px;
+  }
+  .setup-progress-item {
+    gap: 6px;
+    font-size: 10px;
+  }
+  .setup-progress-item span {
+    width: 22px;
+    height: 22px;
+  }
+  .setup-card-wrap {
+    min-height: 0;
+  }
+  .setup-card {
+    min-height: 0;
+    padding: 19px;
+  }
+  .preset-copy b,
+  .recipient-name b,
+  .recipient-share b {
+    font-size: 12px;
+  }
+  .preset-copy small,
+  .recipient-name small,
+  .recipient-share small {
+    font-size: 10px;
+  }
+  .recipient-row {
+    grid-template-columns: 32px minmax(90px, 1fr) auto 44px;
+    gap: 8px;
+  }
+  .avatar {
+    width: 30px;
+    height: 30px;
+  }
+  .share-track {
+    width: 44px;
+  }
+  .page-footer {
+    font-size: 9px;
+  }
+}

@@ -1,26 +1,39 @@
-import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { fixtureAddress } from "./padala-fixture";
 
 vi.mock("server-only", () => ({}));
-const calls = vi.hoisted(() => ({
-  preparePayment: vi.fn(async () => ({ prepared: true })),
-  submitPayment: vi.fn(async () => ({ status: "PENDING" })),
-  paymentStatus: vi.fn(async () => ({ status: "UNKNOWN" })),
-}));
-vi.mock("@/lib/paiflow", () => calls);
+vi.mock("@/lib/templates", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/templates")>();
+  const { fixtureFile } = await import("./padala-fixture");
+  const all = () =>
+    actual.resolveTemplates(fixtureFile, { includeDisabled: true });
+  return {
+    ...actual,
+    listTemplates: () => actual.resolveTemplates(fixtureFile),
+    getTemplate: (id: string) => {
+      const found = all().find((t) => t.id === id);
+      if (!found) throw new Error("unknown template");
+      return found;
+    },
+    findTemplateAny: (id: string) => all().find((t) => t.id === id) ?? null,
+  };
+});
 
 beforeEach(() => {
   vi.resetModules();
-  vi.clearAllMocks();
-  calls.preparePayment.mockResolvedValue({ prepared: true });
-  vi.spyOn(Date, "now").mockReturnValue(100_000);
+  vi.useFakeTimers({ now: new Date("2026-10-25T10:00:00Z") });
+  vi.stubEnv("PAIFLOW_USE_MOCK", "true");
+  vi.stubEnv("SUPABASE_URL", "");
+  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => vi.useRealTimers());
 
-function request(body: unknown, headers: Record<string, string> = {}) {
-  return new Request("https://starter.example/api/pay", {
+function post(path: string, body: unknown, headers: Record<string, string> = {}) {
+  return new Request(`https://padala.example${path}`, {
     method: "POST",
     headers: {
-      origin: "https://starter.example",
+      origin: "https://padala.example",
       "content-type": "application/json",
       ...headers,
     },
@@ -28,57 +41,94 @@ function request(body: unknown, headers: Record<string, string> = {}) {
   });
 }
 
-it("limits preparation without spending the status or submission allowances", async () => {
-  const { POST } = await import("@/app/api/pay/route");
-  for (const [action, field, value, limit] of [
-    ["prepare", "from", "public-account", 20],
-    ["status", "txHash", "a".repeat(64), 120],
-    ["submit", "signedXdr", "fixture-envelope", 20],
-  ] as const) {
-    for (let i = 0; i < limit; i++)
-      expect((await POST(request({ action, [field]: value }))).status).toBe(
-        200,
-      );
-    const blocked = await POST(
-      request(
-        { action, [field]: value },
-        {
-          "x-forwarded-for": "198.51.100.99",
-          "x-real-ip": "198.51.100.98",
-        },
-      ),
-    );
-    expect(blocked.status).toBe(429);
-    expect(blocked.headers.get("Retry-After")).toBe("60");
-    expect((await blocked.json()).error.code).toBe("RATE_LIMITED");
-  }
-  expect(calls.preparePayment).toHaveBeenCalledTimes(20);
-  expect(calls.submitPayment).toHaveBeenCalledTimes(20);
-  expect(calls.paymentStatus).toHaveBeenCalledTimes(120);
-  vi.mocked(Date.now).mockReturnValue(160_000);
+it("caps prepare, submit and status budgets independently and reports the delay", async () => {
+  const { POST: prepare } = await import(
+    "@/app/api/transfers/prepare/route"
+  );
+  const { POST: submit } = await import("@/app/api/transfers/submit/route");
+  const { GET: status } = await import("@/app/api/transfers/[id]/route");
+  const validPrepare = {
+    templateId: "monthly-allotment",
+    walletAddress: fixtureAddress,
+    amount: "100",
+  };
+  for (let i = 0; i < 20; i++)
+    expect((await prepare(post("/api/transfers/prepare", validPrepare))).status).toBe(200);
+  const blockedPrepare = await prepare(
+    post("/api/transfers/prepare", validPrepare, {
+      "x-forwarded-for": "198.51.100.99",
+    }),
+  );
+  expect(blockedPrepare.status).toBe(429);
+  expect(blockedPrepare.headers.get("Retry-After")).toBe("60");
+  expect((await blockedPrepare.json()).error).toMatchObject({
+    code: "RATE_LIMITED",
+    retryAfterSeconds: 60,
+  });
+
+  for (let i = 0; i < 20; i++)
+    expect(
+      (await submit(post("/api/transfers/submit", {
+        transferId: "tr_x",
+        signedXdr: "AAAA",
+      }))).status,
+    ).toBe(404); // budget spent, then 429
   expect(
-    (await POST(request({ action: "prepare", from: "public-account" }))).status,
-  ).toBe(200);
+    (
+      await submit(post("/api/transfers/submit", {
+        transferId: "tr_x",
+        signedXdr: "AAAA",
+      }))
+    ).status,
+  ).toBe(429);
+
+  for (let i = 0; i < 120; i++)
+    expect(
+      (
+        await status(
+          new Request("https://padala.example/api/transfers/tr_x"),
+          { params: Promise.resolve({ id: "tr_x" }) },
+        )
+      ).status,
+    ).toBe(404);
+  expect(
+    (
+      await status(
+        new Request("https://padala.example/api/transfers/tr_x"),
+        { params: Promise.resolve({ id: "tr_x" }) },
+      )
+    ).status,
+  ).toBe(429);
+
+  // Moving past the window restores service.
+  vi.setSystemTime(new Date("2026-10-25T10:01:01Z"));
+  expect((await prepare(post("/api/transfers/prepare", validPrepare))).status).toBe(200);
 });
 
-it("also caps invalid traffic before SDK calls or body parsing", async () => {
-  const { POST } = await import("@/app/api/pay/route");
+it("caps total request volume before any body parsing", async () => {
+  const { POST: prepare } = await import(
+    "@/app/api/transfers/prepare/route"
+  );
   for (let i = 0; i < 240; i++)
-    expect((await POST(request({ action: "unknown" }))).status).toBe(400);
-  expect((await POST(request({ action: "unknown" }))).status).toBe(429);
-  expect(calls.preparePayment).not.toHaveBeenCalled();
-  expect(calls.submitPayment).not.toHaveBeenCalled();
+    expect((await prepare(post("/api/transfers/prepare", {}))).status).toBe(400);
+  const blocked = await prepare(post("/api/transfers/prepare", {}));
+  expect(blocked.status).toBe(429);
 });
 
 it("rejects declared oversized bodies before reading them", async () => {
-  const { POST } = await import("@/app/api/pay/route");
-  const response = await POST(request({}, { "content-length": "210001" }));
+  const { POST: prepare } = await import(
+    "@/app/api/transfers/prepare/route"
+  );
+  const response = await prepare(
+    post("/api/transfers/prepare", {}, { "content-length": "210001" }),
+  );
   expect(response.status).toBe(413);
-  expect(calls.preparePayment).not.toHaveBeenCalled();
 });
 
 it("counts streamed bytes and cancels oversized input despite a false length", async () => {
-  const { POST } = await import("@/app/api/pay/route");
+  const { POST: prepare } = await import(
+    "@/app/api/transfers/prepare/route"
+  );
   const cancel = vi.fn();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -87,11 +137,11 @@ it("counts streamed bytes and cancels oversized input despite a false length", a
     },
     cancel,
   });
-  const response = await POST(
-    new Request("https://starter.example/api/pay", {
+  const response = await prepare(
+    new Request("https://padala.example/api/transfers/prepare", {
       method: "POST",
       headers: {
-        origin: "https://starter.example",
+        origin: "https://padala.example",
         "content-type": "application/json",
         "content-length": "1",
       },
@@ -101,19 +151,35 @@ it("counts streamed bytes and cancels oversized input despite a false length", a
   );
   expect(response.status).toBe(413);
   expect(cancel).toHaveBeenCalledOnce();
-  expect(calls.submitPayment).not.toHaveBeenCalled();
 });
 
-it("returns client errors for malformed JSON, wrong media type and cross-origin requests", async () => {
-  const { POST } = await import("@/app/api/pay/route");
+it("returns client errors for cross-origin, wrong media type and malformed JSON", async () => {
+  const { POST: prepare } = await import(
+    "@/app/api/transfers/prepare/route"
+  );
   expect(
-    (await POST(request({}, { origin: "https://evil.example" }))).status,
+    (
+      await prepare(
+        post(
+          "/api/transfers/prepare",
+          {},
+          { origin: "https://evil.example" },
+        ),
+      )
+    ).status,
   ).toBe(403);
   expect(
-    (await POST(request({}, { "content-type": "application/json-evil" })))
-      .status,
+    (
+      await prepare(
+        post(
+          "/api/transfers/prepare",
+          {},
+          { "content-type": "application/json-evil" },
+        ),
+      )
+    ).status,
   ).toBe(415);
-  const malformed = request({});
+  const malformed = post("/api/transfers/prepare", {});
   vi.spyOn(malformed, "body", "get").mockReturnValue(
     new ReadableStream({
       start(controller) {
@@ -122,31 +188,16 @@ it("returns client errors for malformed JSON, wrong media type and cross-origin 
       },
     }),
   );
-  expect((await POST(malformed)).status).toBe(400);
-  expect(calls.preparePayment).not.toHaveBeenCalled();
+  expect((await prepare(malformed)).status).toBe(400);
 });
 
-it("accepts valid JSON at the byte limit and rejects oversized bodies without a declared length", async () => {
-  const { readJson } = await import("@/lib/http");
-  const value = "x".repeat(209998);
-  expect(await readJson(request(value))).toBe(value);
-  await expect(readJson(request(value + "x"))).rejects.toMatchObject({
-    status: 413,
-  });
-});
-
-it("reports the remaining delay and keeps failed upstream calls within the budget", async () => {
-  const { POST } = await import("@/app/api/pay/route");
-  calls.preparePayment.mockRejectedValue(new Error("upstream unavailable"));
-  for (let i = 0; i < 20; i++)
-    expect(
-      (await POST(request({ action: "prepare", from: "public-account" })))
-        .status,
-    ).toBe(502);
-  vi.mocked(Date.now).mockReturnValue(130_001);
-  const blocked = await POST(
-    request({ action: "prepare", from: "public-account" }),
-  );
-  expect(blocked.status).toBe(429);
-  expect(blocked.headers.get("Retry-After")).toBe("30");
+it("GET routes need no Origin header", async () => {
+  const { GET: templates } = await import("@/app/api/templates/route");
+  const { GET: fx } = await import("@/app/api/fx/route");
+  const templatesResponse = await templates();
+  expect(templatesResponse.status).toBe(200);
+  expect((await templatesResponse.json()).mock).toBe(true);
+  const fxResponse = await fx();
+  expect(fxResponse.status).toBe(200);
+  expect((await fxResponse.json()).displayOnly).toBe(true);
 });

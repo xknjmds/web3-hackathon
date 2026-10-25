@@ -7,28 +7,28 @@
             "id": "r-parents",
             "name": "Parents",
             "relationship": "Parents",
-            "walletAddress": "TODO_PARENTS_G_ADDRESS",
+            "walletAddress": "GDMWRYFAOPDJP5HYKHNQS5BDPMUYKM7L4L4RD5W7AMLAEVJJSDEM2B5A",
             "payoutLabel": "GCash (demo)"
         },
         {
             "id": "r-sister",
             "name": "Sister",
             "relationship": "Sister",
-            "walletAddress": "TODO_SISTER_G_ADDRESS",
+            "walletAddress": "GBJJUOFLJ4VYKNH5CCAYRIMOT65M7S7T6CFPFRVTPHVMTPR7YYGX34SZ",
             "payoutLabel": "Maya (demo)"
         },
         {
             "id": "r-niece",
             "name": "Niece",
             "relationship": "Niece",
-            "walletAddress": "TODO_NIECE_G_ADDRESS",
+            "walletAddress": "GAC37DXH7OO2AAWUOKEWNUZPSVIZSTWATCCFTRESM3ZY6A3D6ADXUQYE",
             "payoutLabel": "GCash (demo)"
         },
         {
             "id": "r-godparent",
             "name": "Godparent",
             "relationship": "Godparent",
-            "walletAddress": "TODO_GODPARENT_G_ADDRESS",
+            "walletAddress": "GC3KXDUNSXW3YQQJFYLPZU5Z6BS7MFBV7BVC4EIF5UGFN4SEGB4XX6CZ",
             "payoutLabel": "BPI (demo)"
         }
     ],
@@ -41,7 +41,7 @@
             "mode": "single",
             "priority": 1,
             "enabled": true,
-            "deploymentId": "TODO_DEPLOYMENT_UUID_MONTHLY",
+            "deploymentId": "e542bb62-1c0a-4cbe-9e55-d6ab0b9e5f31",
             "shares": [
                 {
                     "recipientId": "r-parents",

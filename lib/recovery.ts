@@ -10,6 +10,8 @@ export type Recovery = {
   signing?: boolean;
   attempted?: boolean;
   status?: string;
+  // PadalaSplit transfer this preparation belongs to (status reads use it).
+  transfer?: { id: string; templateId: string; amount: string };
 };
 export function readRecovery(scope: string, raw: string): Recovery {
   const r = JSON.parse(raw) as Recovery;
@@ -26,6 +28,10 @@ export function readRecovery(scope: string, raw: string): Recovery {
     !/^[a-f0-9]{64}$/.test(r.prepared.txHash) ||
     (r.signing !== undefined && typeof r.signing !== "boolean") ||
     (r.attempted !== undefined && typeof r.attempted !== "boolean") ||
+    (r.transfer !== undefined &&
+      (!/^tr_[A-Za-z0-9-]{1,100}$/.test(r.transfer.id) ||
+        typeof r.transfer.templateId !== "string" ||
+        !/^\d{1,39}$/.test(r.transfer.amount))) ||
     (r.status !== undefined &&
       !["SUCCESS", "FAILED", "PENDING", "UNKNOWN", "REJECTED"].includes(
         r.status,

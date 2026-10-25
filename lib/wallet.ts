@@ -29,7 +29,10 @@ export async function refreshWallet() {
   if (result.error) throw new Error(result.error.message);
   return result.address;
 }
-export async function signPrepared(prepared: Prepared, address: string) {
+export async function signPrepared(
+  prepared: Pick<Prepared, "xdr" | "network" | "networkPassphrase" | "expiresAt">,
+  address: string,
+) {
   if (
     prepared.network !== "testnet" ||
     prepared.networkPassphrase !== "Test SDF Network ; September 2015"

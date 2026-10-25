@@ -221,3 +221,22 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* PadalaSplit wiring: amount + plan inputs, split preview, payouts. */
+.summary-field { flex: 1; }
+.amount-field, .plan-select { width: 100%; min-width: 0; margin: 2px 0; padding: 3px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 700 15px/1.35 inherit; outline: none; }
+.amount-field:focus, .plan-select:focus { border-bottom-color: var(--green); }
+.amount-field[aria-invalid="true"] { border-bottom-color: var(--danger); }
+.amount-field:disabled, .plan-select:disabled { color: var(--muted); cursor: not-allowed; }
+.plan-select { cursor: pointer; }
+.split-card { margin: -14px 0 30px; padding: 14px 16px 6px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
+.split-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(90px, auto); gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.split-row:last-of-type { border-bottom: 0; }
+.split-row b { display: block; color: var(--ink); font-size: 12px; }
+.split-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
+.split-pct { color: var(--subtle); font-size: 10px; font-weight: 800; letter-spacing: .4px; }
+.split-amount { text-align: right; }
+.split-note { margin: 8px 0; color: var(--subtle); font-size: 10px; line-height: 1.5; }
+.split-note .text-link { margin-left: 0; }
+.payout-block { margin-top: 14px; padding: 12px 12px 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); }
+@media (max-width: 420px) { .split-row { grid-template-columns: minmax(0, 1fr) auto; } .split-pct { display: none; } }

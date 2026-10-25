@@ -1,0 +1,41 @@
+{
+  "name": "paiflow-hackathon-starter",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.4.1",
+  "engines": {
+    "node": ">=22.22.2 <23"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@paiflow/sdk": "0.2.0",
+    "@stellar/freighter-api": "^6.0.1",
+    "@stellar/stellar-sdk": "^17.2.1",
+    "next": "^15.5.28",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@types/react-test-renderer": "19",
+    "react-test-renderer": "19.3.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.12",
+    "vite": "^8.3.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": ">=8.5.23 <9"
+    }
+  },
+  "type": "module"
+}

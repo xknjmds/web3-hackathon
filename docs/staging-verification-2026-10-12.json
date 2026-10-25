@@ -1,0 +1,63 @@
+{
+  "checkedAt": "2026-10-12T09:26:31.706810+00:00",
+  "origin": "https://beta.app.paiflow.xyz",
+  "health": {
+    "status": "ok",
+    "version": "9ae4172",
+    "db": "ok",
+    "redis": "ok",
+    "rpc": "ok"
+  },
+  "method": "Unauthenticated read-only GET /api/health and /api/v1/openapi.json; no wallet or transaction calls.",
+  "publishedPaths": [
+    "/api/deployments/{id}/api-tokens",
+    "/api/deployments/{id}/api-tokens/{tokenId}",
+    "/api/v1/demo-token",
+    "/api/v1/deployments/{id}/balances",
+    "/api/v1/deployments/{id}/capabilities",
+    "/api/v1/deployments/{id}/events",
+    "/api/v1/deployments/{id}/execute",
+    "/api/v1/deployments/{id}/execute/submit",
+    "/api/v1/deployments/{id}/funding",
+    "/api/v1/deployments/{id}/funding/reconcile",
+    "/api/v1/deployments/{id}/funding/submit",
+    "/api/v1/deployments/{id}/payouts",
+    "/api/v1/deployments/{id}/payouts/submit",
+    "/api/v1/deployments/{id}/release-early",
+    "/api/v1/deployments/{id}/schedule/pause",
+    "/api/v1/deployments/{id}/schedule/pause/reconcile",
+    "/api/v1/deployments/{id}/schedule/pause/submit",
+    "/api/v1/deployments/{id}/schedule/resume",
+    "/api/v1/deployments/{id}/schedule/resume/reconcile",
+    "/api/v1/deployments/{id}/schedule/resume/submit",
+    "/api/v1/deployments/{id}/schedule/retrieve",
+    "/api/v1/deployments/{id}/schedule/retrieve/reconcile",
+    "/api/v1/deployments/{id}/schedule/retrieve/submit",
+    "/api/v1/deployments/{id}/schedule/state",
+    "/api/v1/deployments/{id}/subscription/cancel/prepare",
+    "/api/v1/deployments/{id}/subscription/cancel/reconcile",
+    "/api/v1/deployments/{id}/subscription/cancel/submit",
+    "/api/v1/deployments/{id}/subscription/reactivate/prepare",
+    "/api/v1/deployments/{id}/subscription/reactivate/reconcile",
+    "/api/v1/deployments/{id}/subscription/reactivate/submit",
+    "/api/v1/deployments/{id}/subscription/state",
+    "/api/v1/deployments/{id}/swap-quote",
+    "/api/v1/deployments/{id}/transactions/{txHash}",
+    "/api/v1/openapi.json",
+    "/api/webhooks/{id}"
+  ],
+  "sourceCommit": "91483b8d137045c489bc34c937e25b012f2493b4",
+  "differences": {
+    "hostedOnlyPaths": [
+      "/api/v1/deployments/{id}/payouts",
+      "/api/v1/deployments/{id}/payouts/submit"
+    ],
+    "hostedOnlySchemas": [
+      "PayoutPrepareRequest",
+      "PayoutPrepared",
+      "PayoutSubmitRequest"
+    ],
+    "changedDescriptions": ["execute", "capabilities"]
+  },
+  "limits": "Published contract availability only. No deployment-scoped live-state, wallet consent, transaction finality, or testnet flow acceptance verified."
+}

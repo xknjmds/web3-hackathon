@@ -1,5 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
-const root = new URL("../.next/static/", import.meta.url);
+// Same output directory override as next.config.mjs.
+const distDir = process.env.HATI_NEXT_DIST_DIR || ".next";
+const root = new URL(`../${distDir}/static/`, import.meta.url);
 async function scan(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = new URL(

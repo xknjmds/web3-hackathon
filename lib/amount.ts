@@ -1,5 +1,12 @@
 const SCALE = 10_000_000n;
 const MAX = (1n << 127n) - 1n;
+// Strict validation for API-supplied stroop strings (contract rule 1):
+// digits only, positive, within contract i128 arithmetic, ≤39 digits.
+export function isStroops(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{1,39}$/.test(value)) return false;
+  const parsed = BigInt(value);
+  return parsed > 0n && parsed <= MAX;
+}
 export function toStroops(decimal: string): string {
   if (!/^\d+(?:\.\d{1,7})?$/.test(decimal) || decimal.length > 48)
     throw new Error(

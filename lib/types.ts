@@ -1,5 +1,17 @@
 export const TESTNET = "Test SDF Network ; September 2015";
 export const AMOUNT = "10000000";
+export type Asset = "USDC" | "XLM";
+export type TransferStatus =
+  | "PREPARED"
+  | "SUBMITTED"
+  | "PENDING"
+  | "SUCCESS"
+  | "FAILED"
+  | "REJECTED"
+  | "UNKNOWN"
+  | "EXPIRED";
+export type ChainStatus = "PENDING" | "CONFIRMED" | "FAILED";
+export type AmountSource = "transaction" | "event" | "preview";
 export type Prepared = {
   xdr: string;
   network: "testnet" | "mainnet";

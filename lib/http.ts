@@ -1,5 +1,6 @@
 import "server-only";
 import { PaiflowApiError } from "@paiflow/sdk";
+import { ApiError, mapPaiflowError } from "@/lib/errors";
 export class RequestError extends Error {
   constructor(
     readonly status: number,
@@ -44,47 +45,47 @@ export async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-export async function handle(action: () => Promise<unknown>) {
+// Contract-shaped responder: success bodies are returned as-is (no envelope
+// wrapper), errors use the CONTRACT.md ApiError shape with retryAfterSeconds
+// in the body (the Retry-After header is kept for HTTP-native clients).
+export function toApiError(error: unknown): ApiError {
+  if (error instanceof ApiError) return error;
+  if (error instanceof RequestError) {
+    const code =
+      error.status === 429
+        ? ("RATE_LIMITED" as const)
+        : error.status >= 500
+          ? ("PAIFLOW_UNAVAILABLE" as const)
+          : ("VALIDATION_FAILED" as const);
+    const status = error.status >= 500 ? 503 : error.status;
+    return new ApiError(status, code, error.message, error.retryAfter);
+  }
+  if (error instanceof PaiflowApiError) return mapPaiflowError(error);
+  return new ApiError(
+    500,
+    "PAIFLOW_UNAVAILABLE",
+    "Request could not complete safely. No replacement was created; re-check the original transferId.",
+  );
+}
+
+export async function respond(action: () => Promise<unknown>) {
   try {
-    return Response.json({ data: await action() });
+    return Response.json(await action());
   } catch (error) {
-    if (error instanceof RequestError) {
-      return Response.json(
-        { error: { code: error.code, message: error.message } },
-        {
-          status: error.status,
-          headers: error.retryAfter
-            ? { "Retry-After": String(error.retryAfter) }
-            : undefined,
-        },
-      );
-    }
-    if (error instanceof PaiflowApiError) {
-      const headers = new Headers();
-      if (error.metadata.requestId)
-        headers.set("x-request-id", error.metadata.requestId);
-      if (error.metadata.retryAfter)
-        headers.set("Retry-After", error.metadata.retryAfter);
-      return Response.json(
-        {
-          error: {
-            code: error.code,
-            message:
-              "Paiflow request failed. Retain the original payment record and check its status.",
-          },
-        },
-        { status: error.status, headers },
-      );
-    }
+    const mapped = toApiError(error);
+    const body: { code: string; message: string; retryAfterSeconds?: number } =
+      { code: mapped.code, message: mapped.message };
+    if (mapped.retryAfterSeconds != null)
+      body.retryAfterSeconds = mapped.retryAfterSeconds;
     return Response.json(
+      { error: body },
       {
-        error: {
-          code: "UNRESOLVED",
-          message:
-            "Request could not complete. Retain the original envelope and check its status before starting another payment.",
-        },
+        status: mapped.status,
+        headers:
+          mapped.retryAfterSeconds != null
+            ? { "Retry-After": String(mapped.retryAfterSeconds) }
+            : undefined,
       },
-      { status: 502 },
     );
   }
 }

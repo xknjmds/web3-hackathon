@@ -17,6 +17,7 @@
     "@paiflow/sdk": "0.2.0",
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^17.2.1",
+    "@supabase/supabase-js": "^2.118.0",
     "next": "^15.5.28",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -29,8 +30,8 @@
     "@types/react-test-renderer": "19",
     "react-test-renderer": "19.3.0",
     "typescript": "^5.7.2",
-    "vitest": "^4.1.12",
-    "vite": "^8.3.3"
+    "vite": "^8.3.3",
+    "vitest": "^4.1.12"
   },
   "pnpm": {
     "overrides": {

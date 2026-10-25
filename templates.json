@@ -1,0 +1,145 @@
+{
+    "_readme": "Server-only seed data. Replace every TODO_ value after spike A3 (deployment UUIDs from PaiFlow, recipient wallets from setup task C2). A template is enabled only after its PaiFlow deployment is CONFIRMED. deploymentId and walletAddress are NOT returned by GET /api/templates. Never put tokens or secret keys in this file. mode is always 'single' for the MVP (one PaiFlow payment, many recipients).",
+    "network": "testnet",
+    "usdcIssuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    "recipients": [
+        {
+            "id": "r-parents",
+            "name": "Parents",
+            "relationship": "Parents",
+            "walletAddress": "TODO_PARENTS_G_ADDRESS",
+            "payoutLabel": "GCash (demo)"
+        },
+        {
+            "id": "r-sister",
+            "name": "Sister",
+            "relationship": "Sister",
+            "walletAddress": "TODO_SISTER_G_ADDRESS",
+            "payoutLabel": "Maya (demo)"
+        },
+        {
+            "id": "r-niece",
+            "name": "Niece",
+            "relationship": "Niece",
+            "walletAddress": "TODO_NIECE_G_ADDRESS",
+            "payoutLabel": "GCash (demo)"
+        },
+        {
+            "id": "r-godparent",
+            "name": "Godparent",
+            "relationship": "Godparent",
+            "walletAddress": "TODO_GODPARENT_G_ADDRESS",
+            "payoutLabel": "BPI (demo)"
+        }
+    ],
+    "templates": [
+        {
+            "id": "monthly-allotment",
+            "name": "Monthly allotment",
+            "description": "Regular monthly support for the family.",
+            "asset": "USDC",
+            "mode": "single",
+            "priority": 1,
+            "enabled": true,
+            "deploymentId": "TODO_DEPLOYMENT_UUID_MONTHLY",
+            "shares": [
+                {
+                    "recipientId": "r-parents",
+                    "bps": 5000
+                },
+                {
+                    "recipientId": "r-sister",
+                    "bps": 3000
+                },
+                {
+                    "recipientId": "r-niece",
+                    "bps": 1500
+                },
+                {
+                    "recipientId": "r-godparent",
+                    "bps": 500
+                }
+            ]
+        },
+        {
+            "id": "school-opening",
+            "name": "School opening",
+            "description": "Extra support when classes start.",
+            "asset": "USDC",
+            "mode": "single",
+            "priority": 2,
+            "enabled": false,
+            "deploymentId": "TODO_DEPLOYMENT_UUID_SCHOOL",
+            "shares": [
+                {
+                    "recipientId": "r-parents",
+                    "bps": 2000
+                },
+                {
+                    "recipientId": "r-sister",
+                    "bps": 6000
+                },
+                {
+                    "recipientId": "r-niece",
+                    "bps": 1000
+                },
+                {
+                    "recipientId": "r-godparent",
+                    "bps": 1000
+                }
+            ]
+        },
+        {
+            "id": "equal-share",
+            "name": "Equal share",
+            "description": "Everyone receives the same amount.",
+            "asset": "USDC",
+            "mode": "single",
+            "priority": 3,
+            "enabled": false,
+            "deploymentId": "TODO_DEPLOYMENT_UUID_EQUAL",
+            "shares": [
+                {
+                    "recipientId": "r-parents",
+                    "bps": 2500
+                },
+                {
+                    "recipientId": "r-sister",
+                    "bps": 2500
+                },
+                {
+                    "recipientId": "r-niece",
+                    "bps": 2500
+                },
+                {
+                    "recipientId": "r-godparent",
+                    "bps": 2500
+                }
+            ]
+        },
+        {
+            "id": "core-family-3",
+            "name": "Core family",
+            "description": "Parents, sister and niece only. Also the fallback if PaiFlow limits Split to 3 recipients.",
+            "asset": "USDC",
+            "mode": "single",
+            "priority": 4,
+            "enabled": false,
+            "deploymentId": "TODO_DEPLOYMENT_UUID_CORE3",
+            "shares": [
+                {
+                    "recipientId": "r-parents",
+                    "bps": 6000
+                },
+                {
+                    "recipientId": "r-sister",
+                    "bps": 3000
+                },
+                {
+                    "recipientId": "r-niece",
+                    "bps": 1000
+                }
+            ]
+        }
+    ]
+}

@@ -1,421 +1,106 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import type { PublicConfig, Prepared, Result } from "@/lib/types";
-import {
-  BrowserRequestError,
-  browserRequest,
-  RESPONSE_DEADLINE_MS,
-} from "@/lib/browser-api";
-import {
-  assertStatus,
-  confirmOriginal,
-  CONFIRMATION_PENDING,
-  CONFIRMATION_UNRESOLVED,
-} from "@/lib/confirmation";
-import { connectWallet, signPrepared } from "@/lib/wallet";
-import { assertOriginal } from "@/lib/transaction";
-import {
-  readRecovery,
-  saveRecovery,
-  terminal,
-  assertNoConflictingRecovery,
-} from "@/lib/recovery";
-import type { Recovery } from "@/lib/recovery";
 
-type Operation = {
-  signal: AbortSignal;
-  valid: () => boolean;
-  save: (record: Recovery) => void;
-  message: (message: string) => void;
+import { useMemo, useState } from "react";
+import { fromStroops, toStroops } from "@/lib/amount";
+
+type Recipient = { id: string; name: string; relation: string; method: string; bps: number; color: string };
+type Preset = { id: string; name: string; description: string; recipients: Recipient[] };
+
+const family: Recipient[] = [
+  { id: "parents", name: "Nanay & Tatay", relation: "Parents", method: "GCash", bps: 5000, color: "coral" },
+  { id: "sister", name: "Mika", relation: "Sister", method: "Maya", bps: 3000, color: "lilac" },
+  { id: "niece", name: "Sofia", relation: "Niece", method: "GCash", bps: 1500, color: "gold" },
+  { id: "godparent", name: "Tita Liza", relation: "Godparent", method: "BPI", bps: 500, color: "mint" },
+];
+const withShares = (shares: number[]) => family.map((person, index) => ({ ...person, bps: shares[index] ?? person.bps }));
+const presets: Preset[] = [
+  { id: "monthly", name: "Monthly allotment", description: "Your regular family support, shared automatically.", recipients: family },
+  { id: "school", name: "School opening", description: "A little extra support for the new school year.", recipients: withShares([2000, 6000, 1000, 1000]) },
+  { id: "equal", name: "Equal share", description: "A thoughtful, equal amount for everyone.", recipients: withShares([2500, 2500, 2500, 2500]) },
+];
+const pesoRate = 56;
+const formatAmount = (decimal: string) => {
+  const [whole = "0", fraction = ""] = decimal.split(".");
+  const grouped = new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(BigInt(whole));
+  return `${grouped}${fraction ? `.${fraction}` : ""}`;
+};
+const formatPhpCents = (cents: bigint) => `${new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(cents / 100n)}.${(cents % 100n).toString().padStart(2, "0")}`;
+const sanitizeAmount = (value: string) => {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const [whole = "", ...parts] = cleaned.split(".");
+  const fraction = parts.join("").slice(0, 7);
+  return parts.length ? `${whole || "0"}.${fraction}` : whole;
 };
 
-export function StarterApp({ config }: { config: PublicConfig }) {
-  const [address, setAddress] = useState("");
-  const [record, setRecord] = useState<Recovery | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [message, setMessage] = useState("");
-  const [blocked, setBlocked] = useState(true);
-  const key = config.ready ? `paiflow-sdk-payment-v2:${config.scope}` : "";
-  const scopeKey = useRef(key);
-  scopeKey.current = key;
-  const loadedKey = useRef<string | null>(null);
-  const active = useRef<AbortController | null>(null);
-  const resumed = useRef(new Set<string>());
-  useEffect(() => {
-    loadedKey.current = null;
-    active.current?.abort();
-    active.current = null;
-    setBusy(false);
-    setConfirming(false);
-    resumed.current.clear();
-    setBlocked(true);
-    setRecord(null);
-    setAddress("");
-    setMessage("");
-    if (!config.ready) return;
-    try {
-      assertNoConflictingRecovery(localStorage, key);
-      const raw = localStorage.getItem(key);
-      if (raw) setRecord(readRecovery(config.scope, raw));
-      loadedKey.current = key;
-      setBlocked(false);
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Recovery storage could not be read. Preserve it for support before starting another payment.",
-      );
-    }
-    return () => {
-      loadedKey.current = null;
-      active.current?.abort();
-    };
-  }, [key, config.ready]);
-
-  async function run(
-    action: (current: Recovery | null, op: Operation) => Promise<void>,
-  ) {
-    if (!config.ready || active.current || blocked || loadedKey.current !== key)
-      return;
-    const controller = new AbortController();
-    active.current = controller;
-    const valid = () =>
-      !controller.signal.aborted &&
-      scopeKey.current === key &&
-      loadedKey.current === key;
-    const op: Operation = {
-      signal: controller.signal,
-      valid,
-      save: (r) => {
-        if (!valid())
-          throw new DOMException("Operation cancelled", "AbortError");
-        if (r.scope !== config.scope)
-          throw new Error(
-            "Recovery scope mismatch. Retain the original record.",
-          );
-        saveRecovery(localStorage, key, r);
-        setRecord(r);
-      },
-      message: (text) => {
-        if (valid()) setMessage(text);
-      },
-    };
-    setBusy(true);
-    setMessage("");
-    try {
-      if (!navigator.locks)
-        throw new Error(
-          "This browser needs Web Locks support for safe payment recovery.",
-        );
-      await navigator.locks.request(
-        key,
-        { ifAvailable: true },
-        async (lock) => {
-          if (!valid()) return;
-          if (!lock)
-            throw new Error(
-              "Another tab is handling this deployment's payment. Return to that tab.",
-            );
-          assertNoConflictingRecovery(localStorage, key);
-          const raw = localStorage.getItem(key);
-          const current = raw ? readRecovery(config.scope, raw) : null;
-          setRecord(current);
-          await action(current, op);
-        },
-      );
-    } catch (error) {
-      op.message(
-        error instanceof Error
-          ? error.message
-          : "Unresolved operation. Keep the original record.",
-      );
-    } finally {
-      if (active.current === controller) {
-        active.current = null;
-        if (scopeKey.current === key && loadedKey.current === key) {
-          setBusy(false);
-          setConfirming(false);
-        }
-      }
-    }
-  }
-
-  function statusMessage(result: Result) {
-    if (result.status === "SUCCESS")
-      return "Original transaction confirmed. This does not verify downstream payouts or fulfil an application order.";
-    if (result.status === "FAILED")
-      return "Original transaction failed on the network. Its evidence is retained until acknowledged.";
-    return `Original transaction: ${result.status}. UNKNOWN, rejection, expiry or missing history never prove replacement is safe.`;
-  }
-  async function checkOriginal(current: Recovery, op: Operation) {
-    if (!op.valid()) return;
-    resumed.current.add(`${key}:${current.prepared.txHash}`);
-    op.message(CONFIRMATION_PENDING);
-    setConfirming(true);
-    const outcome = await confirmOriginal({
-      txHash: current.prepared.txHash,
-      signal: op.signal,
-      lookup: (signal, remainingMs) =>
-        browserRequest<Result>(
-          "/api/pay",
-          { action: "status", txHash: current.prepared.txHash },
-          signal,
-          remainingMs,
-        ),
-      onResult: (result) => {
-        op.save({ ...current, status: result.status });
-        if (
-          result.status === "SUCCESS" ||
-          result.status === "FAILED" ||
-          result.status === "REJECTED"
-        )
-          op.message(statusMessage(result));
-      },
+export function StarterApp(_props?: { config?: unknown }) {
+  const [connected, setConnected] = useState(false);
+  const [screen, setScreen] = useState<"send" | "review" | "progress" | "receipt" | "recover">("send");
+  const [setupStep, setSetupStep] = useState(0);
+  const [presetId, setPresetId] = useState("monthly");
+  const [amount, setAmount] = useState("100");
+  const [saved, setSaved] = useState(false);
+  const [status, setStatus] = useState("PENDING");
+  const preset = presets.find((item) => item.id === presetId)!;
+  let amountStroops = 0n;
+  try { amountStroops = BigInt(toStroops(amount)); } catch { amountStroops = 0n; }
+  const totalDisplay = formatAmount(amountStroops ? fromStroops(amountStroops.toString()) : "0");
+  const phpCents = (amountStroops * 56n + 50_000n) / 100_000n;
+  const payouts = useMemo(() => {
+    let allocated = 0n;
+    return preset.recipients.map((recipient, index) => {
+      const shareStroops = index === preset.recipients.length - 1
+        ? amountStroops - allocated
+        : amountStroops * BigInt(recipient.bps) / 10_000n;
+      allocated += shareStroops;
+      return { ...recipient, share: formatAmount(fromStroops(shareStroops.toString())) };
     });
-    if (outcome === "unresolved") op.message(CONFIRMATION_UNRESOLVED);
-  }
-  useEffect(() => {
-    if (
-      blocked ||
-      busy ||
-      !record?.attempted ||
-      !record.signedXdr ||
-      terminal(record)
-    )
-      return;
-    const identity = `${key}:${record.prepared.txHash}`;
-    if (resumed.current.has(identity)) return;
-    resumed.current.add(identity);
-    void run(async (current, op) => {
-      if (current?.attempted && current.signedXdr && !terminal(current))
-        await checkOriginal(current, op);
-    });
-  }, [key, blocked, busy, record]);
+  }, [preset, amountStroops]);
 
-  async function prepare(current: Recovery | null, op: Operation) {
-    if (current)
-      throw new Error("Resolve the existing payment before preparing another.");
-    if (!address) throw new Error("Connect Freighter first.");
-    const prepared = await browserRequest<Prepared>(
-      "/api/pay",
-      { action: "prepare", from: address },
-      op.signal,
-    );
-    if (!config.ready) return;
-    op.save({ version: 2, scope: config.scope, address, prepared });
-    op.message(
-      "Prepared and saved. Review the wallet transaction before approving.",
-    );
+  function beginDemo() {
+    setSaved(true);
+    setStatus("PENDING");
+    setScreen("progress");
+    window.setTimeout(() => setScreen((current) => current === "progress" ? "receipt" : current), 1300);
+    window.setTimeout(() => setStatus("SUCCESS"), 1300);
   }
-  async function sign(current: Recovery | null, op: Operation) {
-    if (!current || current.signedXdr || terminal(current)) return;
-    if (address !== current.address)
-      throw new Error("Connect the original consenting wallet.");
-    const next = { ...current, signing: true };
-    op.save(next);
-    const signedXdr = await signPrepared(current.prepared, current.address);
-    assertOriginal(current.prepared.xdr, signedXdr, current.prepared.txHash);
-    op.save({ ...next, signing: false, signedXdr });
-    op.message("Exact signed envelope saved. Submit when ready.");
-  }
-  async function submit(current: Recovery | null, op: Operation) {
-    if (!current?.signedXdr || terminal(current)) return;
-    assertOriginal(
-      current.prepared.xdr,
-      current.signedXdr,
-      current.prepared.txHash,
-    );
-    const next = { ...current, attempted: true };
-    resumed.current.add(`${key}:${current.prepared.txHash}`);
-    op.save(next);
-    let result: Result;
-    try {
-      result = await browserRequest<Result>(
-        "/api/pay",
-        {
-          action: "submit",
-          signedXdr: current.signedXdr,
-          preparationRequestId: current.prepared.preparationRequestId,
-        },
-        op.signal,
-        RESPONSE_DEADLINE_MS,
-      );
-    } catch (error) {
-      if (!op.valid()) return;
-      if (
-        error instanceof BrowserRequestError &&
-        error.status < 500 &&
-        error.code !== "UPSTREAM_RPC"
-      )
-        throw error;
-      await checkOriginal(next, op);
-      return;
-    }
-    if (!op.valid()) return;
-    if (result.txHash !== current.prepared.txHash)
-      throw new Error("Response hash mismatch. Keep the original record.");
-    if (result.status === "REJECTED") {
-      op.save({ ...next, status: "REJECTED" });
-      op.message(statusMessage(result));
-      return;
-    }
-    // Confirmation uses the original status route even when submission reports success.
-    await checkOriginal(next, op);
-  }
-  async function status(current: Recovery | null, op: Operation) {
-    if (!current) return;
-    const result = await browserRequest<Result>(
-      "/api/pay",
-      { action: "status", txHash: current.prepared.txHash },
-      op.signal,
-      RESPONSE_DEADLINE_MS,
-    );
-    if (!op.valid()) return;
-    assertStatus(result, current.prepared.txHash);
-    op.save({ ...current, status: result.status });
-    op.message(statusMessage(result));
-  }
-  async function clear(current: Recovery | null, op: Operation) {
-    if (!current || !terminal(current))
-      throw new Error(
-        "Check final SUCCESS or FAILED before clearing this record.",
-      );
-    if (!op.valid()) return;
-    localStorage.removeItem(key);
-    if (localStorage.getItem(key) !== null)
-      throw new Error("Could not clear stored evidence.");
-    setRecord(null);
-    op.message(
-      "Final transaction acknowledged. A new demo payment is now possible.",
-    );
-  }
+
   return (
-    <main>
-      <header>
-        <h1>Paiflow SDK payment starter</h1>
-        <span className="chip" data-testid="network-chip">
-          TESTNET
-        </span>
-      </header>
-      <p>
-        A minimal 1 XLM payment demo using the server-side Paiflow SDK and
-        Freighter. Use your own native-XLM Receive deployment. No goods or
-        orders are fulfilled by this example.
-      </p>
-      {!config.ready ? (
-        <aside>{config.message}</aside>
-      ) : (
-        <p>
-          <a href={config.deploymentUrl} target="_blank" rel="noreferrer">
-            Review your deployment and its recipients
-          </a>
-        </p>
-      )}
-      <section>
-        <h2>1. Connect and prepare</h2>
-        <button
-          disabled={busy || !config.ready || blocked}
-          onClick={() =>
-            run(async (_current, op) => {
-              await browserRequest("/api/integration", undefined, op.signal);
-              const address = await connectWallet();
-              if (op.valid()) setAddress(address);
-            })
-          }
-        >
-          Connect Freighter
-        </button>
-        <p>Wallet: {address || "Not connected"}</p>
-        <p>
-          Payment: 1 testnet XLM plus network fees. Review the full transaction
-          in Freighter.
-        </p>
-        <button
-          disabled={busy || blocked || !address || !!record}
-          onClick={() => run(prepare)}
-        >
-          Prepare 1 XLM payment
-        </button>
-      </section>
-      <section>
-        <h2>2. Sign and submit</h2>
-        <button
-          disabled={
-            busy || !record || !!record.signedXdr || terminal(record) || blocked
-          }
-          onClick={() => run(sign)}
-        >
-          Sign original transaction
-        </button>{" "}
-        <button
-          disabled={
-            busy ||
-            !record?.signedXdr ||
-            (!!record && terminal(record)) ||
-            blocked
-          }
-          onClick={() => run(submit)}
-        >
-          {record?.attempted
-            ? "Retry exact saved envelope"
-            : "Submit saved envelope"}
-        </button>
-      </section>
-      <section>
-        <h2>3. Verify and recover</h2>
-        <p>
-          Reloading restores the original preparation and signed envelope. Keep
-          this browser's storage until the original transaction is resolved.
-          Re-signing uses the same body; it never prepares a replacement.
-        </p>
-        {record && (
-          <>
-            <p>
-              Original transaction: <code>{record.prepared.txHash}</code>
-            </p>
-            <p>Preparation expires: {record.prepared.expiresAt}</p>
-            <p>Status: {record.status || "Not checked"}</p>
-          </>
-        )}
-        <button
-          disabled={busy || !record || blocked}
-          onClick={() => run(status)}
-        >
-          Check original transaction
-        </button>{" "}
-        <button
-          disabled={busy || !record || !terminal(record) || blocked}
-          onClick={() => run(clear)}
-        >
-          Acknowledge final result and clear
-        </button>
-        <p>
-          Inspect the deployment's activity and recipient balances separately to
-          verify your intended payment and payout rules. Transaction
-          confirmation alone is not application payment verification.
-        </p>
-      </section>
-      <p role="status" aria-live="polite">
-        {confirming ? message : busy ? "Working…" : message}
-      </p>
-      {confirming && (
-        <button
-          onClick={() => {
-            active.current?.abort();
-            setMessage(CONFIRMATION_UNRESOLVED);
-          }}
-        >
-          Stop checking
-        </button>
-      )}
-      <aside>
-        This local demo has no app authentication, order database, rate limit or
-        business verification. Do not deploy it as a production checkout. A
-        production application must bind prepared transactions to authorised
-        orders and keep durable server-side recovery evidence. Browser storage
-        is not a backup; deleting it loses recovery.
+    <main className="app-shell">
+      <aside className="sidebar">
+        <a className="brand" href="#home" onClick={(event) => { event.preventDefault(); setSetupStep(0); setScreen("send"); }}><span className="brand-mark">H</span><span>Hati<span className="brand-dot">.</span></span></a>
+        <div className="side-label">YOUR SPACE</div>
+        <button className={`nav-item ${screen !== "recover" ? "active" : ""}`} onClick={() => { setSetupStep(0); setScreen("send"); }}><span>↗</span> Send money</button>
+        <button className={`nav-item ${screen === "recover" ? "active" : ""}`} onClick={() => { if (!saved) setSetupStep(0); setScreen(saved ? "recover" : "send"); }}><span>◷</span> Activity</button>
+        <div className="side-bottom"><div className="help-icon">?</div><div><b>Here for your family</b><small>Simple, thoughtful support.</small></div></div>
       </aside>
+
+      <div className="main-column">
+        <header className="topbar"><div className="breadcrumb">Home <span>/</span> Send money</div><div className="top-actions"><span className="network-pill"><i /> TESTNET</span><button className="wallet-button" onClick={() => setConnected(!connected)}><span className="wallet-glyph">◈</span>{connected ? "G...7K2M" : "Connect wallet"}</button></div></header>
+        <div className="content-wrap">
+          <div className="demo-banner"><span className="sparkle">✳</span><span><b>Interactive sample</b><small>Demo only · No real wallet or payment is connected</small></span><button aria-label="Dismiss sample notice">×</button></div>
+          {screen === "send" && <>
+            <div className="page-heading setup-heading"><div><div className="eyebrow">SET UP YOUR TRANSFER</div><h1>{setupStep === 0 ? <>Choose your plan<span className="heading-period">.</span></> : setupStep === 1 ? <>How much to send?<span className="heading-period">.</span></> : <>Your family split<span className="heading-period">.</span></>}</h1><p>{setupStep === 0 ? "Choose a preset for how your support is shared." : setupStep === 1 ? "Set the amount you’d like your family to receive." : "Review how your selected plan shares the amount."}</p></div></div>
+            <div className="stepper"><div className={`step ${connected ? "done" : ""}`}><span>{connected ? "✓" : "1"}</span><b>Method</b></div><i/><div className="step current"><span>2</span><b>Set up</b></div><i/><div className="step"><span>3</span><b>Review</b></div><i/><div className="step"><span>4</span><b>Confirm</b></div></div>
+            <div className="setup-progress" aria-label={`Setup step ${setupStep + 1} of 3`}>{["Choose plan", "Set amount", "Family split"].map((label, index) => <button key={label} className={`setup-progress-item ${setupStep === index ? "current" : setupStep > index ? "done" : ""}`} onClick={() => index <= setupStep && setSetupStep(index)} disabled={index > setupStep}><span>{setupStep > index ? "✓" : index + 1}</span>{label}</button>)}</div>
+            <div className="setup-card-wrap">
+              {setupStep === 0 && <section className="form-card setup-card"><p className="setup-card-intro">Choose the preset that fits this transfer.</p><div className="preset-list">{presets.map((item, index) => <button key={item.id} className={`preset-option ${presetId === item.id ? "selected" : ""}`} onClick={() => setPresetId(item.id)}><span className={`preset-icon icon-${index}`}>{["↗", "✳", "♡"][index]}</span><span className="preset-copy"><b>{item.name}</b><small>{item.description}</small></span><span className={`radio ${presetId === item.id ? "checked" : ""}`}>{presetId === item.id && <i/>}</span></button>)}</div></section>}
+              {setupStep === 1 && <section className="form-card setup-card amount-card"><p className="setup-card-intro">Enter any amount in USDC, or choose a quick amount.</p><label className="amount-input-label" htmlFor="amount">TOTAL AMOUNT</label><div className="amount-input-wrap"><span>$</span><input id="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(sanitizeAmount(e.target.value))}/><b>USDC</b></div><div className="quick-amounts">{[50, 100, 200, 500].map((value) => <button key={value} className={amount === String(value) ? "chosen" : ""} onClick={() => setAmount(String(value))}>${value}</button>)}</div><div className="conversion-note"><span>≈</span><div><b>₱{formatPhpCents(phpCents)} PHP</b><small>Estimated · Sample rate: 1 USDC = ₱{pesoRate}.00</small></div><span className="info-dot">i</span></div></section>}
+              {setupStep === 2 && <section className="form-card setup-card split-card"><div className="split-meta-row"><span className="setup-card-intro">This plan shares your amount this way.</span><span className="fixed-pill">FIXED PLAN</span></div><div className="split-total split-total-top"><span>Total you’re sending</span><b>${totalDisplay} <small>USDC</small></b></div><div className="recipient-list">{payouts.map((person) => <div className="recipient-row" key={person.id}><span className={`avatar avatar-${person.color}`}>{person.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span><span className="recipient-name"><b>{person.name}</b><small>{person.relation} · {person.method}</small></span><span className="recipient-share"><b>${person.share}</b><small>{(person.bps / 100).toFixed(person.bps % 100 ? 1 : 0)}%</small></span><span className="share-track"><i style={{ width: `${person.bps / 100}%` }}/></span></div>)}</div></section>}
+            </div>
+            <div className="form-footer setup-footer"><span><span className="lock-mark">♧</span> All three steps are part of set up. Review before continuing.</span><div className="setup-actions">{setupStep > 0 && <button className="secondary-button" onClick={() => setSetupStep(setupStep - 1)}>← Back</button>}{setupStep < 2 ? <button className="primary-button" onClick={() => setSetupStep(setupStep + 1)}>Continue <span>→</span></button> : <button className="primary-button" onClick={() => setScreen("review")} disabled={!connected || amountStroops <= 0n}>Review transfer <span>→</span></button>}</div></div>
+            {!connected && <div className="connect-hint">Connect a wallet to continue to review <span>↑</span></div>}
+          </>}
+
+          {screen === "review" && <div className="narrow-page"><button className="back-link" onClick={() => { setSetupStep(0); setScreen("send"); }}>← Back to details</button><div className="page-heading compact-heading"><div><div className="eyebrow">TAKE A MOMENT</div><h1>Review your<br/> transfer<span className="heading-period">.</span></h1><p>Make sure everything looks right before continuing.</p></div></div><div className="stepper"><div className="step done"><span>✓</span><b>Method</b></div><i/><div className="step done"><span>✓</span><b>Set up</b></div><i/><div className="step current"><span>3</span><b>Review</b></div><i/><div className="step"><span>4</span><b>Confirm</b></div></div><section className="review-card"><div className="review-title"><span className="preset-icon icon-0">↗</span><div><small>YOUR PLAN</small><h2>{preset.name}</h2></div><button onClick={() => { setSetupStep(0); setScreen("send"); }}>Edit</button></div><div className="review-total"><span>You’re sending</span><b>${totalDisplay} <small>USDC</small></b><small>≈ ₱{formatPhpCents(phpCents)} PHP <em>· Sample rate</em></small></div><div className="review-recipients"><div className="section-caption">SHARED WITH YOUR FAMILY</div>{payouts.map((person) => <div className="review-person" key={person.id}><span className={`avatar avatar-${person.color}`}>{person.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span><span><b>{person.name}</b><small>{person.method} · {person.bps / 100}%</small></span><strong>${person.share}</strong></div>)}</div><div className="review-footnote">This is a sample preview. Final payouts are determined by the selected payment plan.</div></section><button className="primary-button full-button" onClick={beginDemo}>Continue to wallet <span>→</span></button><p className="safe-note">You’ll review and approve the transaction in your wallet.</p></div>}
+
+          {screen === "progress" && <div className="center-state"><div className="loader-orbit"><span>↗</span></div><div className="eyebrow">JUST A MOMENT</div><h1>Sending your<br/> love home<span className="heading-period">.</span></h1><p>Checking the original transfer. This sample will show a confirmation shortly.</p><div className="progress-steps"><div className="complete"><span>✓</span><b>Transfer prepared</b></div><div className="complete"><span>✓</span><b>Wallet approval simulated</b></div><div className="waiting"><span>•••</span><b>Checking transfer status</b></div></div><button className="quiet-button" onClick={() => setScreen("recover")}>View recovery details</button></div>}
+
+          {screen === "receipt" && <div className="narrow-page receipt-page"><div className="success-emblem"><span>✓</span><i>✳</i></div><div className="eyebrow centered">A LITTLE CARE, DELIVERED</div><h1 className="centered-title">Support is on<br/> its way<span className="heading-period">.</span></h1><p className="centered-copy">Your sample transfer has been marked successful.</p><div className="mock-banner">DEMO RESULT <span>·</span> No real payment was made</div><section className="receipt-card"><div className="receipt-top"><span>TRANSFER TOTAL</span><span className="status-success"><i/> SUCCESS</span></div><div className="receipt-amount">${totalDisplay} <small>USDC</small></div><div className="receipt-meta">{preset.name} <span>·</span> Sample rate ≈ ₱{formatPhpCents(phpCents)}</div><div className="receipt-divider"/><div className="section-caption">PAYOUT BREAKDOWN</div>{payouts.map((person) => <div className="review-person payout-person" key={person.id}><span className={`avatar avatar-${person.color}`}>{person.name.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span><span><b>{person.name}</b><small>{person.method} · Preview amount</small></span><strong>${person.share}</strong></div>)}<div className="tx-link">◈ <span>Demo transaction · No explorer record</span></div></section><div className="receipt-actions"><button className="primary-button" onClick={() => { setSaved(true); setSetupStep(0); setScreen("send"); }}>Send another <span>↗</span></button><button className="secondary-button" onClick={() => setScreen("recover")}>View transfer details</button></div></div>}
+
+          {screen === "recover" && <div className="narrow-page"><button className="back-link" onClick={() => setScreen(status === "SUCCESS" ? "receipt" : "send")}>← Back</button><div className="page-heading compact-heading"><div><div className="eyebrow">TRANSFER ACTIVITY</div><h1>Transfer<br/> details<span className="heading-period">.</span></h1><p>Your original transfer record is kept here for reference.</p></div></div><section className="review-card recovery-card"><div className="recovery-status"><span className="status-success"><i/> {status}</span><small>Sample transfer</small></div><div className="review-total"><span>{preset.name}</span><b>${totalDisplay} <small>USDC</small></b><small>≈ ₱{formatPhpCents(phpCents)} PHP · Sample estimate</small></div><div className="recovery-info"><div><span>Transfer reference</span><b>demo_7f3a...91c2</b></div><div><span>Wallet</span><b>{connected ? "G...7K2M" : "Demo wallet"}</b></div><div><span>Network</span><b>Stellar Testnet</b></div></div><div className="recovery-note"><b>Recovery safety</b><p>If a real transfer’s status is uncertain, check that original transfer. Don’t start a replacement while its outcome is unknown.</p></div></section><button className="secondary-button full-button" onClick={() => setScreen("receipt")}>View sample receipt</button></div>}
+          <footer className="page-footer"><span>Made with care <b>♡</b></span><span>Sample experience <i/> Stellar Testnet</span></footer>
+        </div>
+      </div>
     </main>
   );
 }

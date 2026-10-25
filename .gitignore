@@ -3,3 +3,5 @@ node_modules/
 .env*
 !.env.example
 *.tsbuildinfo
+.next-build-check/
+.codex-test-tmp/
